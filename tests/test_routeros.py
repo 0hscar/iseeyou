@@ -25,8 +25,32 @@ SYSTEM_RESOURCE = {
     "board-name": "hAP ax3",
 }
 INTERFACES = [
-    {".id": "*1", "name": "ether1", "type": "ether", "running": "true", "disabled": "false"},
-    {".id": "*2", "name": "bridge", "type": "bridge", "running": "true", "disabled": "false"},
+    {
+        ".id": "*1",
+        "name": "ether1",
+        "type": "ether",
+        "running": "true",
+        "disabled": "false",
+        "rx-byte": "1000",
+        "tx-byte": "2000",
+        "rx-packet": "10",
+        "tx-packet": "20",
+        "rx-error": "0",
+        "tx-error": "1",
+    },
+    {
+        ".id": "*2",
+        "name": "bridge",
+        "type": "bridge",
+        "running": "true",
+        "disabled": "false",
+        "rx-byte": "3000",
+        "tx-byte": "4000",
+        "rx-packet": "30",
+        "tx-packet": "40",
+        "rx-error": "0",
+        "tx-error": "0",
+    },
 ]
 
 
@@ -50,7 +74,10 @@ def test_discover_reads_system_and_interface_data_using_get_only() -> None:
             )
             return httpx.Response(200, json=SYSTEM_RESOURCE)
         if request.url.path == "/rest/interface":
-            assert request.url.params[".proplist"] == ".id,name,type,running,disabled"
+            assert request.url.params[".proplist"] == (
+                ".id,name,type,running,disabled,rx-byte,tx-byte,rx-packet,tx-packet,"
+                "rx-error,tx-error"
+            )
             return httpx.Response(200, json=INTERFACES)
         return httpx.Response(404)
 
@@ -73,6 +100,9 @@ def test_discover_reads_system_and_interface_data_using_get_only() -> None:
     assert [interface.name for interface in snapshot.interfaces] == ["ether1", "bridge"]
     assert snapshot.interfaces[0].running is True
     assert snapshot.interfaces[0].disabled is False
+    assert snapshot.interfaces[0].rx_bytes == 1000
+    assert snapshot.interfaces[0].tx_bytes == 2000
+    assert snapshot.interfaces[0].rx_errors == 0
     assert [request.method for request in requests] == ["GET", "GET"]
 
 
@@ -209,3 +239,25 @@ def test_discovery_rejects_empty_interface_results() -> None:
 
     with pytest.raises(RouterOSResponseError, match="no interfaces"):
         asyncio.run(discover())
+
+
+def test_interface_counter_fields_can_be_missing() -> None:
+    interface = RouterOSRestClient._parse_interface(
+        {".id": "*1", "name": "ether1", "type": "ether"}
+    )
+
+    assert interface.rx_bytes is None
+    assert interface.tx_bytes is None
+    assert interface.rx_packets is None
+
+
+def test_interface_counter_fields_reject_invalid_values() -> None:
+    with pytest.raises(RouterOSResponseError, match="invalid rx-byte"):
+        RouterOSRestClient._parse_interface(
+            {
+                ".id": "*1",
+                "name": "ether1",
+                "type": "ether",
+                "rx-byte": "not-a-number",
+            }
+        )

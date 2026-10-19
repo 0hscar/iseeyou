@@ -232,12 +232,13 @@ Work incrementally rather than generating the entire platform at once.
 - Discover interfaces and retrieve supported system metrics.
 - Validate permissions and handle connection failures.
 
-**Phase 3 — Collection and storage**
+**Phase 3 — Collection and storage (implementation complete)**
+- [x] Implement scheduled polling.
+- [x] Calculate interface throughput and configurable TCP connectivity metrics.
+- [x] Store timestamped raw counters and measurements in SQLite.
+- [x] Test reboot, timeout, counter-reset and missing-data scenarios.
 
-- Implement scheduled polling.
-- Calculate throughput and connectivity metrics.
-- Store timestamped measurements in SQLite.
-- Test reboot, timeout, counter-reset and missing-data scenarios.
+The live `ether1` counters and calculated rates have been verified against the configured MikroTik. TCP connectivity targets remain opt-in and must be configured before those metrics are collected. The collector reports TCP probe failures, not ICMP packet loss; outage-event transitions are not implemented yet and remain a first-release follow-up.
 
 **Phase 4 — Dashboard**
 

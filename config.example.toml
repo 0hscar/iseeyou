@@ -13,3 +13,19 @@ level = "INFO"
 # username = "isee-monitor"
 # ca_file = "/path/to/router-ca.pem"
 # timeout_seconds = 5
+
+[collection]
+interval_seconds = 10
+database_path = "data/isee.sqlite3"
+# Leave empty to collect all interfaces. Avoid adding both a bridge and its
+# member ports when interpreting aggregate traffic.
+interfaces = []
+probes_per_target = 3
+probe_timeout_seconds = 2
+
+# Connectivity probes use TCP connection attempts to the configured service.
+# Add targets explicitly; they are not contacted by default.
+# [[collection.targets]]
+# name = "public-https"
+# host = "1.1.1.1"
+# port = 443

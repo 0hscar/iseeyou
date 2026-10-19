@@ -2,9 +2,11 @@ import argparse
 import asyncio
 import json
 import os
+import tomllib
 from dataclasses import asdict
 
 import uvicorn
+from pydantic import ValidationError
 
 from isee.app import create_app
 from isee.config import RouterSettings, load_settings
@@ -20,7 +22,10 @@ def main() -> None:
     router_actions.add_parser("discover", help="Read RouterOS system and interface information")
     arguments = parser.parse_args()
 
-    settings = load_settings()
+    try:
+        settings = load_settings()
+    except (OSError, tomllib.TOMLDecodeError, ValidationError) as exc:
+        parser.exit(status=2, message=f"Configuration error: {exc}\n")
     configure_logging(settings.logging.level)
 
     if arguments.command == "router":

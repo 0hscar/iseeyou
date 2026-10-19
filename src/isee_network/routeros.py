@@ -50,6 +50,12 @@ class RouterInterface:
     type: str
     running: bool | None
     disabled: bool | None
+    rx_bytes: int | None = None
+    tx_bytes: int | None = None
+    rx_packets: int | None = None
+    tx_packets: int | None = None
+    rx_errors: int | None = None
+    tx_errors: int | None = None
 
 
 @dataclass(frozen=True)
@@ -105,7 +111,19 @@ class RouterOSRestClient:
 
         interface_rows = await self._get_records(
             "interface",
-            (".id", "name", "type", "running", "disabled"),
+            (
+                ".id",
+                "name",
+                "type",
+                "running",
+                "disabled",
+                "rx-byte",
+                "tx-byte",
+                "rx-packet",
+                "tx-packet",
+                "rx-error",
+                "tx-error",
+            ),
         )
         if not interface_rows:
             raise RouterOSResponseError("RouterOS returned no interfaces")
@@ -214,6 +232,12 @@ class RouterOSRestClient:
             type=cls._required_string(record, "type"),
             running=cls._optional_bool(record, "running"),
             disabled=cls._optional_bool(record, "disabled"),
+            rx_bytes=cls._optional_counter(record, "rx-byte"),
+            tx_bytes=cls._optional_counter(record, "tx-byte"),
+            rx_packets=cls._optional_counter(record, "rx-packet"),
+            tx_packets=cls._optional_counter(record, "tx-packet"),
+            rx_errors=cls._optional_counter(record, "rx-error"),
+            tx_errors=cls._optional_counter(record, "tx-error"),
         )
 
     @staticmethod
@@ -250,3 +274,16 @@ class RouterOSRestClient:
         if value.lower() == "false":
             return False
         raise RouterOSResponseError(f"RouterOS returned an invalid {key}")
+
+    @classmethod
+    def _optional_counter(cls, record: dict[str, Any], key: str) -> int | None:
+        value = cls._optional_string(record, key)
+        if value is None:
+            return None
+        try:
+            counter = int(value)
+        except ValueError as exc:
+            raise RouterOSResponseError(f"RouterOS returned an invalid {key}") from exc
+        if counter < 0:
+            raise RouterOSResponseError(f"RouterOS returned an invalid {key}")
+        return counter
