@@ -1,0 +1,15 @@
+[server]
+host = "127.0.0.1"
+port = 8000
+
+[logging]
+level = "INFO"
+
+# RouterOS REST is accessed only over HTTPS. Leave commented until the router
+# has www-ssl enabled with a certificate trusted by this host.
+# [router]
+# host = "router.lan"
+# port = 443
+# username = "isee-monitor"
+# ca_file = "/path/to/router-ca.pem"
+# timeout_seconds = 5
