@@ -58,3 +58,24 @@ def test_sqlite_store_persists_counters_and_invalid_rate_reason(tmp_path: Path) 
     assert latest.tx_bytes == 5678
     assert latest.router_uptime_seconds == 3600
     assert latest.collected_at.isoformat() == "2026-01-01T00:00:00.500000+00:00"
+
+
+def test_sqlite_store_migrates_schema_version_one_to_two(tmp_path: Path) -> None:
+    database_path = tmp_path / "network.sqlite3"
+    SQLiteStore(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP INDEX connectivity_samples_by_target")
+        connection.execute("PRAGMA user_version = 1")
+
+    SQLiteStore(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        index = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'index' AND name = 'connectivity_samples_by_target'
+            """
+        ).fetchone()
+    assert version == 2
+    assert index == ("connectivity_samples_by_target",)

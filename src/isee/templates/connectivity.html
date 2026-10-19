@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Network</p>
+      <h1>Connectivity</h1>
+      <p class="page-description">TCP service reachability and latency for explicitly configured targets.</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Targets</p>
+        <h2>Latest checks</h2>
+      </div>
+    </div>
+    <div class="target-grid" id="connectivity-targets">
+      <p class="empty-state">No connectivity targets are configured or no samples have been collected.</p>
+    </div>
+  </section>
+
+  <section class="panel chart-panel">
+    <div class="chart-toolbar">
+      <div class="field-group">
+        <label for="target-select">Target</label>
+        <select id="target-select" disabled>
+          <option value="">Waiting for targets…</option>
+        </select>
+      </div>
+      <div class="range-control" role="group" aria-label="Chart time range">
+        <button type="button" data-hours="1">1h</button>
+        <button type="button" data-hours="6">6h</button>
+        <button type="button" data-hours="24" aria-pressed="true">24h</button>
+        <button type="button" data-hours="168">7d</button>
+      </div>
+    </div>
+    <div class="chart-legend">
+      <span><i class="legend-swatch latency-swatch"></i>TCP connection latency</span>
+      <span><i class="legend-swatch failure-swatch"></i>Failed probes (%)</span>
+    </div>
+    <div class="chart-frame" id="connectivity-chart" role="img" aria-label="Connectivity latency and failed probe percentage over time"></div>
+    <p class="chart-empty" id="connectivity-empty">No connectivity samples are available for this range.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">History</p>
+        <h2>Unreachable periods</h2>
+      </div>
+    </div>
+    <div class="stack-list" id="connectivity-outages">
+      <p class="empty-state">Select a target to view its recent fully failed probe periods.</p>
+    </div>
+    <p class="panel-note">A period is shown only when all configured TCP attempts failed. This is service reachability history, not ICMP packet loss or proof of an internet outage.</p>
+  </section>
+  <p class="inline-error" id="connectivity-error" role="status" hidden></p>
+{% endblock %}

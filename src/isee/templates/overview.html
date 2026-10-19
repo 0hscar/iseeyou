@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Network</p>
+      <h1>Overview</h1>
+      <p class="page-description">Router health and recent network measurements.</p>
+    </div>
+    <span class="freshness-label" id="updated-at">Waiting for collector data</span>
+  </div>
+
+  <section class="metric-grid" aria-label="Network summary">
+    <article class="metric-card">
+      <div class="metric-heading"><span>Router</span><span class="metric-symbol" aria-hidden="true">⌂</span></div>
+      <p class="metric-value" id="router-status">Unknown</p>
+      <p class="metric-caption" id="router-uptime">No successful sample yet</p>
+    </article>
+    <article class="metric-card">
+      <div class="metric-heading"><span>CPU load</span><span class="metric-symbol" aria-hidden="true">◒</span></div>
+      <p class="metric-value" id="cpu-load">—</p>
+      <p class="metric-caption">Latest RouterOS sample</p>
+    </article>
+    <article class="metric-card">
+      <div class="metric-heading"><span>Memory</span><span class="metric-symbol" aria-hidden="true">▤</span></div>
+      <p class="metric-value" id="memory-used">—</p>
+      <p class="metric-caption" id="memory-total">Latest RouterOS sample</p>
+    </article>
+    <article class="metric-card">
+      <div class="metric-heading"><span>Collector</span><span class="metric-symbol" aria-hidden="true">◷</span></div>
+      <p class="metric-value" id="collector-status">Unknown</p>
+      <p class="metric-caption" id="collector-freshness">No collection yet</p>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Traffic</p>
+        <h2>Interfaces</h2>
+      </div>
+      <a class="text-link" href="/interfaces">View history <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Interface</th>
+            <th scope="col">Link</th>
+            <th scope="col">RX · received</th>
+            <th scope="col">TX · sent</th>
+            <th scope="col">Freshness</th>
+          </tr>
+        </thead>
+        <tbody id="interface-rows">
+          <tr><td class="empty-cell" colspan="5">Waiting for interface samples…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="content-grid">
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Reachability</p>
+          <h2>Configured targets</h2>
+        </div>
+        <a class="text-link" href="/connectivity">Details <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="stack-list" id="connectivity-rows">
+        <p class="empty-state">No connectivity targets have reported samples yet.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">History</p>
+          <h2>Recent unreachable periods</h2>
+        </div>
+      </div>
+      <div class="stack-list" id="outage-rows">
+        <p class="empty-state">No fully failed probe periods in the last 24 hours.</p>
+      </div>
+      <p class="panel-note">Periods are derived when every TCP probe to a target fails; they are not ICMP packet-loss events.</p>
+    </section>
+  </div>
+  <p class="inline-error" id="overview-error" role="status" hidden></p>
+{% endblock %}

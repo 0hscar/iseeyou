@@ -10,7 +10,7 @@ from typing import Any
 from isee_network.metrics import CounterSample
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class SQLiteStore:
@@ -107,6 +107,19 @@ class SQLiteStore:
                     COMMIT;
                     """
                 )
+                version = 1
+            if version == 1:
+                connection.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+
+                    CREATE INDEX IF NOT EXISTS connectivity_samples_by_target
+                        ON connectivity_samples (target_name, run_id);
+
+                    PRAGMA user_version = 2;
+                    COMMIT;
+                    """
+                )
 
     def latest_interface_samples(
         self,
@@ -147,6 +160,130 @@ class SQLiteStore:
             )
             for row in rows
         }
+
+    def latest_collection_run(self) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                """
+                SELECT id, completed_at, router_sampled_at, router_status, uptime,
+                       cpu_load_percent, free_memory_bytes, total_memory_bytes
+                FROM collection_runs
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def latest_interface_records(self) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT s.*, r.router_sampled_at
+                FROM interface_samples AS s
+                JOIN collection_runs AS r ON r.id = s.run_id
+                WHERE s.run_id = (
+                    SELECT MAX(previous.run_id)
+                    FROM interface_samples AS previous
+                    WHERE previous.interface_name = s.interface_name
+                )
+                ORDER BY s.interface_name
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def interface_history(
+        self,
+        interface_name: str,
+        since: str,
+        bucket_seconds: int,
+    ) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    MIN(r.router_sampled_at) AS sampled_at,
+                    CAST(strftime('%s', r.router_sampled_at) AS INTEGER) / ?
+                        AS bucket_number,
+                    MAX(s.rate_valid) AS rate_valid,
+                    AVG(CASE WHEN s.rate_valid = 1
+                             THEN s.rx_bits_per_second END) AS rx_bits_per_second,
+                    AVG(CASE WHEN s.rate_valid = 1
+                             THEN s.tx_bits_per_second END) AS tx_bits_per_second
+                FROM interface_samples AS s
+                JOIN collection_runs AS r ON r.id = s.run_id
+                WHERE s.interface_name = ?
+                  AND r.router_sampled_at >= ?
+                GROUP BY bucket_number
+                ORDER BY bucket_number
+                """,
+                (bucket_seconds, interface_name, since),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def latest_connectivity_records(self) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT c.*, r.completed_at AS sampled_at
+                FROM connectivity_samples AS c
+                JOIN collection_runs AS r ON r.id = c.run_id
+                WHERE c.run_id = (
+                    SELECT MAX(previous.run_id)
+                    FROM connectivity_samples AS previous
+                    WHERE previous.target_name = c.target_name
+                )
+                ORDER BY c.target_name
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def connectivity_history(
+        self,
+        target_name: str,
+        since: str,
+        bucket_seconds: int,
+    ) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    MIN(r.completed_at) AS sampled_at,
+                    CAST(strftime('%s', r.completed_at) AS INTEGER) / ?
+                        AS bucket_number,
+                    AVG(c.latency_ms) AS latency_ms,
+                    AVG(c.probe_failure_percent) AS probe_failure_percent
+                FROM connectivity_samples AS c
+                JOIN collection_runs AS r ON r.id = c.run_id
+                WHERE c.target_name = ?
+                  AND r.completed_at >= ?
+                GROUP BY bucket_number
+                ORDER BY bucket_number
+                """,
+                (bucket_seconds, target_name, since),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def connectivity_samples_since(
+        self,
+        target_name: str,
+        since: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT r.completed_at AS sampled_at, c.probes_sent,
+                       c.probes_succeeded, c.probe_failure_percent
+                FROM connectivity_samples AS c
+                JOIN collection_runs AS r ON r.id = c.run_id
+                WHERE c.target_name = ?
+                  AND r.completed_at >= ?
+                ORDER BY r.id
+                LIMIT ?
+                """,
+                (target_name, since, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def save_cycle(
         self,
