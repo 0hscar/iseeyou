@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from isee.config import RouterSettings, Settings, load_settings
+from isee.config import (
+    CollectionSettings,
+    ConnectivityTarget,
+    RouterSettings,
+    Settings,
+    load_settings,
+)
 
 
 def test_settings_have_localhost_defaults() -> None:
@@ -40,6 +46,12 @@ def test_load_settings_reads_toml(tmp_path: Path) -> None:
         {"server": {"port": 65536}},
         {"logging": {"level": "TRACE"}},
         {"unexpected": True},
+        {"collection": {"interfaces": ["ether1"]}},
+        {
+            "collection": {
+                "targets": [{"name": "public", "host": "1.1.1.1", "port": 443}]
+            }
+        },
     ],
 )
 def test_settings_reject_invalid_values(document: dict[str, object]) -> None:
@@ -50,6 +62,18 @@ def test_settings_reject_invalid_values(document: dict[str, object]) -> None:
 def test_explicit_missing_config_path_is_an_error(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_settings(tmp_path / "missing.toml")
+
+
+def test_configured_interfaces_are_allowed_with_router() -> None:
+    settings = Settings.model_validate(
+        {
+            "router": {"host": "router.lan", "username": "monitor"},
+            "collection": {"interfaces": ["ether1"]},
+        }
+    )
+
+    assert settings.router is not None
+    assert settings.collection.interfaces == ["ether1"]
 
 
 def test_router_settings_validate_target_and_timeout() -> None:
@@ -77,3 +101,35 @@ def test_router_settings_validate_target_and_timeout() -> None:
 def test_router_settings_reject_invalid_values(document: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         RouterSettings.model_validate(document)
+
+
+def test_collection_settings_defaults_and_connectivity_target() -> None:
+    settings = CollectionSettings(
+        targets=[ConnectivityTarget(name="gateway", host="192.168.88.1", port=443)]
+    )
+
+    assert settings.interval_seconds == 10
+    assert settings.database_path == Path("data/isee.sqlite3")
+    assert settings.interfaces == []
+    assert settings.targets[0].name == "gateway"
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"interval_seconds": 0},
+        {"probes_per_target": 11},
+        {"interfaces": ["ether1", "ether1"]},
+        {"database_path": ":memory:"},
+        {
+            "targets": [
+                {"name": "wan", "host": "1.1.1.1", "port": 443},
+                {"name": "wan", "host": "example.net", "port": 443},
+            ]
+        },
+        {"targets": [{"name": "wan", "host": "https://example.net", "port": 443}]},
+    ],
+)
+def test_collection_settings_reject_invalid_values(document: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        CollectionSettings.model_validate(document)

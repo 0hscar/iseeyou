@@ -1,8 +1,8 @@
 # RouterOS read-only discovery
 
-Phase 2 uses the RouterOS REST API over HTTPS to read system resources and discover interfaces. RouterOS documents REST as a JSON wrapper for its API, available through the `www-ssl` service. iSeeYou uses only `GET` requests for `/rest/system/resource` and `/rest/interface`; it does not change router configuration.
+The RouterOS REST API over HTTPS reads system resources, interface metadata, and interface counters. RouterOS documents REST as a JSON wrapper for its API, available through the `www-ssl` service. iSeeYou uses only `GET` requests for `/rest/system/resource` and `/rest/interface`; it does not change router configuration.
 
-This choice keeps the initial integration to standard HTTPS/JSON and lets the client validate the router certificate. The binary RouterOS API uses a custom sentence protocol and API-SSL service; SNMPv3 is standardized and may be a better choice for broad interface-counter collection, but RouterOS-specific system data requires its MIB/OID mappings. Revisit the transport if later metrics or polling performance warrant it.
+This choice keeps the integration to standard HTTPS/JSON and lets the client validate the router certificate. The binary RouterOS API uses a custom sentence protocol and API-SSL service; SNMPv3 is standardized and may be a better choice for broad interface-counter collection, but RouterOS-specific system data requires its MIB/OID mappings. REST supplies cumulative `rx-byte` and `tx-byte` interface counters, so iSeeYou calculates rates from successive reads.
 
 ## Router prerequisites
 
@@ -46,8 +46,36 @@ set -e ISEE_ROUTER_PASSWORD
 
 The final command removes the password from the current shell. Run it even if discovery fails; closing the shell or restarting the workstation also clears the variable. The password is not persisted by iSeeYou.
 
-The command prints uptime, CPU load, memory totals, and discovered interface identifiers, names, types, and link state as JSON. A connection timeout, certificate error, rejected credential, denied permission, or malformed RouterOS response causes a nonzero failure instead of returning success-shaped empty data.
+For scheduled collection, keep the variable exported while the API is running. Start `.venv/bin/isee` in that terminal, stop it with Ctrl-C when finished, then run `set -e ISEE_ROUTER_PASSWORD`. The API refuses to start collection when a configured router has no password in the environment.
 
-## Current read scope
+The command prints uptime, CPU load, memory totals, and discovered interface identifiers, names, types, link state, and available counters as JSON. A connection timeout, certificate error, rejected credential, denied permission, or malformed RouterOS response causes a nonzero failure instead of returning success-shaped empty data.
 
-The client requests RouterOS system resource properties and interface metadata. It does not yet poll counters, calculate throughput, store measurements, or run as a background collector; those belong to the collection and persistence phases.
+## Scheduled collection
+
+When `[router]` is configured, starting the iSeeYou API starts the collector. It polls at `collection.interval_seconds` (10 seconds by default), stores raw interface counters and derived bit-per-second rates in SQLite, and persists router resource values and configured connectivity results. The default database is `data/isee.sqlite3`; its parent directory is created as needed. Configure `collection.database_path` for another location.
+
+An empty `collection.interfaces` list collects all interfaces. If set, it selects interface names exactly as RouterOS reports them. Avoid summing a bridge and its member ports together: their counters can represent the same traffic. The router's `.id` is saved to detect interface replacement between samples. The first sample, missing counters, a reset, a reboot, an interface replacement, a non-positive time interval, or a long sample gap is recorded with no throughput rate; missing or invalid data is not stored as zero.
+
+RouterOS documents `/interface print stats` properties such as `rx-byte`, `tx-byte`, `rx-packet`, `tx-packet`, `rx-error`, and `tx-error`. Its interface documentation also warns that hardware-offloaded traffic may be absent from these software interface counters. Fast Path counters are separate; iSeeYou currently stores the documented general counters and does not claim to measure hardware-offloaded traffic. See [Interface stats and monitor-traffic](https://help.mikrotik.com/docs/spaces/ROS/pages/139526175/Interface%20stats%20and%20monitor-traffic) and the [interface CLI reference](https://manual.mikrotik.com/docs/cli-reference/interface/).
+
+Rates are stored in bits per second: router RX is traffic received by the router (typically download on a WAN interface), and router TX is traffic sent by the router (typically upload on a WAN interface). These are per-interface values, not an inferred whole-network total.
+
+Connectivity targets are optional `[[collection.targets]]` entries with a unique name, host, and TCP port. Each collection cycle attempts the connection sequentially up to `probes_per_target` times per target (targets run concurrently) with the configured timeout; persisted latency is the average successful TCP connection time, and failed attempts are recorded as a probe-failure percentage. This includes DNS resolution time for hostnames and records DNS resolution failures separately; it is not ICMP ping or true packet-loss measurement. The router's own REST polls indicate router reachability separately. A TCP failure means only that the configured service could not be reached, not that the whole internet is down.
+
+Check collector state and freshness at `/health/collector`. The ordinary `/health` endpoint reports application health separately. The SQLite database and new parent directory are created with owner-only permissions; stop iSeeYou before copying the database for a consistent backup.
+
+Example collection configuration:
+
+```toml
+[collection]
+interval_seconds = 10
+database_path = "data/isee.sqlite3"
+interfaces = ["ether1"]
+probes_per_target = 3
+probe_timeout_seconds = 2
+
+[[collection.targets]]
+name = "public-https"
+host = "1.1.1.1"
+port = 443
+```
