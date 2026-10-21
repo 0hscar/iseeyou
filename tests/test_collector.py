@@ -36,10 +36,25 @@ def snapshot(
                 type="ether",
                 running=True,
                 disabled=False,
+                comment="WAN",
                 rx_bytes=rx_bytes,
                 tx_bytes=tx_bytes,
                 rx_packets=10,
                 tx_packets=20,
+                rx_errors=0,
+                tx_errors=0,
+            ),
+            RouterInterface(
+                router_id="*2",
+                name="ether2",
+                type="ether",
+                running=False,
+                disabled=False,
+                comment="Office LAN",
+                rx_bytes=500,
+                tx_bytes=600,
+                rx_packets=5,
+                tx_packets=6,
                 rx_errors=0,
                 tx_errors=0,
             ),
@@ -108,6 +123,14 @@ def test_collector_persists_rates_and_tcp_probe_loss(
             FROM interface_samples ORDER BY run_id
             """
         ).fetchall()
+        inventory = connection.execute(
+            """
+            SELECT interface_name, comment
+            FROM interface_inventory
+            WHERE run_id = (SELECT MAX(run_id) FROM interface_inventory)
+            ORDER BY interface_name
+            """
+        ).fetchall()
         connectivity = connection.execute(
             """
             SELECT probes_sent, probes_succeeded, probe_failure_percent, latency_ms
@@ -119,6 +142,7 @@ def test_collector_persists_rates_and_tcp_probe_loss(
     assert rates[1][0] == 1
     assert rates[1][1] is None
     assert rates[1][2] is not None and rates[1][2] > 0
+    assert inventory == [("ether1", "WAN"), ("ether2", "Office LAN")]
     assert connectivity == [(2, 1, 50.0, 5.0), (2, 1, 50.0, 5.0)]
     assert health.status == "ok"
     assert health.last_success_at is not None

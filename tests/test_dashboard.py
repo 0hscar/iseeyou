@@ -46,6 +46,24 @@ def _save_sample(
                 "tx_bits_per_second": 250_000.0,
             }
         ],
+        interface_inventory=[
+            {
+                "interface_name": "ether1",
+                "router_interface_id": "*1",
+                "interface_type": "ether",
+                "comment": "WAN",
+                "running": True,
+                "disabled": False,
+            },
+            {
+                "interface_name": "ether2",
+                "router_interface_id": "*2",
+                "interface_type": "ether",
+                "comment": "Office LAN",
+                "running": False,
+                "disabled": False,
+            },
+        ],
         connectivity=[
             {
                 "target_name": "gateway",
@@ -86,6 +104,7 @@ def test_dashboard_pages_and_local_assets_are_served(tmp_path: Path) -> None:
     assert all(response.status_code == 200 for response in responses)
     assert "Overview" in responses[0].text
     assert "Interfaces" in responses[1].text
+    assert "Comment" in responses[1].text
     assert "Connectivity" in responses[2].text
     assert "--page:" in responses[3].text
     assert len(responses[4].content) > 10_000
@@ -136,8 +155,13 @@ def test_dashboard_api_returns_samples_and_derived_outage_history(
 
     assert responses["overview"].status_code == 200
     assert overview["router"]["status"] == "available"
-    assert overview["interfaces"][0]["name"] == "ether1"
+    assert [item["name"] for item in overview["interfaces"]] == ["ether1", "ether2"]
+    assert overview["interfaces"][0]["comment"] == "WAN"
+    assert overview["interfaces"][0]["monitored"] is True
     assert overview["interfaces"][0]["rx_bits_per_second"] == 1_500_000.0
+    assert overview["interfaces"][1]["comment"] == "Office LAN"
+    assert overview["interfaces"][1]["monitored"] is False
+    assert overview["interfaces"][1]["rx_bytes"] is None
     assert overview["connectivity"][0]["status"] == "reachable"
     assert len(overview["recent_outages"]) == 1
     assert overview["recent_outages"][0]["ongoing"] is False

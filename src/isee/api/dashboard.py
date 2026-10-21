@@ -28,8 +28,11 @@ class RouterOverview(BaseModel):
 class InterfaceOverview(BaseModel):
     name: str
     type: str
+    comment: str | None
     running: bool | None
+    monitored: bool
     sampled_at: str | None
+    rates_sampled_at: str | None
     freshness: Literal["unknown", "fresh", "stale"]
     rate_valid: bool
     rate_reason: str | None
@@ -316,15 +319,19 @@ def _interface_overview(
     now: datetime,
     interval_seconds: int,
 ) -> InterfaceOverview:
-    sampled_at = row["router_sampled_at"]
-    freshness = _freshness(sampled_at, now, interval_seconds)
+    rates_sampled_at = row["rates_sampled_at"]
+    monitored = rates_sampled_at is not None
+    freshness = _freshness(rates_sampled_at, now, interval_seconds)
     return InterfaceOverview(
         name=row["interface_name"],
         type=row["interface_type"],
+        comment=row["comment"],
         running=None if row["running"] is None else bool(row["running"]),
-        sampled_at=sampled_at,
+        monitored=monitored,
+        sampled_at=row["router_sampled_at"],
+        rates_sampled_at=rates_sampled_at,
         freshness=freshness,
-        rate_valid=bool(row["rate_valid"]),
+        rate_valid=bool(row["rate_valid"]) if monitored else False,
         rate_reason=row["rate_reason"],
         rx_bits_per_second=row["rx_bits_per_second"],
         tx_bits_per_second=row["tx_bits_per_second"],

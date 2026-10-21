@@ -50,6 +50,7 @@ class RouterInterface:
     type: str
     running: bool | None
     disabled: bool | None
+    comment: str | None = None
     rx_bytes: int | None = None
     tx_bytes: int | None = None
     rx_packets: int | None = None
@@ -115,6 +116,7 @@ class RouterOSRestClient:
                 ".id",
                 "name",
                 "type",
+                "comment",
                 "running",
                 "disabled",
                 "rx-byte",
@@ -230,6 +232,7 @@ class RouterOSRestClient:
             router_id=cls._optional_string(record, ".id"),
             name=cls._required_string(record, "name"),
             type=cls._required_string(record, "type"),
+            comment=cls._optional_string(record, "comment"),
             running=cls._optional_bool(record, "running"),
             disabled=cls._optional_bool(record, "disabled"),
             rx_bytes=cls._optional_counter(record, "rx-byte"),

@@ -88,21 +88,30 @@ function renderOverview(data) {
   const interfaceRows = document.getElementById("interface-rows");
   interfaceRows.replaceChildren();
   if (data.interfaces.length === 0) {
-    interfaceRows.append(emptyRow("No interface samples are available.", 5));
+    interfaceRows.append(emptyRow("No interface inventory is available yet.", 6));
   }
   for (const item of data.interfaces) {
     const row = document.createElement("tr");
     const name = document.createElement("td");
     name.textContent = item.name;
+    const comment = document.createElement("td");
+    comment.textContent = item.comment || "—";
     const link = document.createElement("td");
-    link.append(makeBadge(item.running === null ? "unknown" : item.running ? "up" : "down", item.running === null ? "unknown" : item.running ? "available" : "unavailable"));
+    const linkStatus =
+      item.running === null ? "unknown" : item.running ? "available" : "unavailable";
+    link.append(
+      makeBadge(item.running === null ? "unknown" : item.running ? "up" : "down", linkStatus),
+    );
     const rx = document.createElement("td");
     rx.textContent = item.rate_valid ? formatRate(item.rx_bits_per_second) : "—";
     const tx = document.createElement("td");
     tx.textContent = item.rate_valid ? formatRate(item.tx_bits_per_second) : "—";
     const freshness = document.createElement("td");
-    freshness.append(makeBadge(item.freshness, item.freshness));
-    row.append(name, link, rx, tx, freshness);
+    const freshnessStatus = item.monitored ? item.freshness : "not monitored";
+    freshness.append(
+      makeBadge(freshnessStatus, item.monitored ? item.freshness : "unknown"),
+    );
+    row.append(name, comment, link, rx, tx, freshness);
     interfaceRows.append(row);
   }
 

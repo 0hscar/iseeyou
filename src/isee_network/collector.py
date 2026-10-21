@@ -80,6 +80,7 @@ class NetworkCollector:
         connectivity_results = await self._probe_targets()
         completed = datetime.now(timezone.utc)
         interface_samples: list[dict[str, Any]] = []
+        interface_inventory: list[dict[str, Any]] = []
         system: dict[str, Any] | None = None
 
         if router_snapshot is not None:
@@ -92,6 +93,17 @@ class NetworkCollector:
                 "free_memory_bytes": router_snapshot.system.free_memory_bytes,
                 "total_memory_bytes": router_snapshot.system.total_memory_bytes,
             }
+            interface_inventory = [
+                {
+                    "interface_name": interface.name,
+                    "router_interface_id": interface.router_id,
+                    "interface_type": interface.type,
+                    "comment": interface.comment,
+                    "running": interface.running,
+                    "disabled": interface.disabled,
+                }
+                for interface in router_snapshot.interfaces
+            ]
             selected_interfaces = [
                 interface
                 for interface in router_snapshot.interfaces
@@ -149,6 +161,7 @@ class NetworkCollector:
             router_error=router_error,
             system=system,
             interfaces=interface_samples,
+            interface_inventory=interface_inventory,
             connectivity=connectivity_samples,
         )
 

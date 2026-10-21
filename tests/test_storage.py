@@ -41,6 +41,16 @@ def test_sqlite_store_persists_counters_and_invalid_rate_reason(tmp_path: Path) 
             }
         ],
         connectivity=[],
+        interface_inventory=[
+            {
+                "interface_name": "ether1",
+                "router_interface_id": "*1",
+                "interface_type": "ether",
+                "comment": "WAN",
+                "running": True,
+                "disabled": False,
+            }
+        ],
     )
 
     reopened_store = SQLiteStore(database_path)
@@ -58,6 +68,7 @@ def test_sqlite_store_persists_counters_and_invalid_rate_reason(tmp_path: Path) 
     assert latest.tx_bytes == 5678
     assert latest.router_uptime_seconds == 3600
     assert latest.collected_at.isoformat() == "2026-01-01T00:00:00.500000+00:00"
+    assert reopened_store.latest_interface_records()[0]["comment"] == "WAN"
 
 
 def test_sqlite_store_migrates_schema_version_one_to_two(tmp_path: Path) -> None:
@@ -77,5 +88,12 @@ def test_sqlite_store_migrates_schema_version_one_to_two(tmp_path: Path) -> None
             WHERE type = 'index' AND name = 'connectivity_samples_by_target'
             """
         ).fetchone()
-    assert version == 2
+        inventory_table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'interface_inventory'
+            """
+        ).fetchone()
+    assert version == 3
     assert index == ("connectivity_samples_by_target",)
+    assert inventory_table == ("interface_inventory",)

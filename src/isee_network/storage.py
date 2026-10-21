@@ -10,7 +10,7 @@ from typing import Any
 from isee_network.metrics import CounterSample
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SQLiteStore:
@@ -120,6 +120,30 @@ class SQLiteStore:
                     COMMIT;
                     """
                 )
+                version = 2
+            if version == 2:
+                connection.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+
+                    CREATE TABLE IF NOT EXISTS interface_inventory (
+                        run_id INTEGER NOT NULL REFERENCES collection_runs(id),
+                        interface_name TEXT NOT NULL,
+                        router_interface_id TEXT,
+                        interface_type TEXT NOT NULL,
+                        comment TEXT,
+                        running INTEGER,
+                        disabled INTEGER,
+                        PRIMARY KEY (run_id, interface_name)
+                    );
+
+                    CREATE INDEX IF NOT EXISTS interface_inventory_by_run
+                        ON interface_inventory (run_id, interface_name);
+
+                    PRAGMA user_version = 3;
+                    COMMIT;
+                    """
+                )
 
     def latest_interface_samples(
         self,
@@ -178,15 +202,37 @@ class SQLiteStore:
         with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 """
-                SELECT s.*, r.router_sampled_at
-                FROM interface_samples AS s
-                JOIN collection_runs AS r ON r.id = s.run_id
-                WHERE s.run_id = (
-                    SELECT MAX(previous.run_id)
-                    FROM interface_samples AS previous
-                    WHERE previous.interface_name = s.interface_name
+                SELECT
+                    inventory.interface_name,
+                    inventory.router_interface_id,
+                    inventory.interface_type,
+                    inventory.comment,
+                    inventory.running,
+                    inventory.disabled,
+                    inventory_run.router_sampled_at,
+                    sample.rate_valid,
+                    sample.rate_reason,
+                    sample.rx_bits_per_second,
+                    sample.tx_bits_per_second,
+                    sample.rx_bytes,
+                    sample.tx_bytes,
+                    sample_run.router_sampled_at AS rates_sampled_at
+                FROM interface_inventory AS inventory
+                JOIN collection_runs AS inventory_run ON inventory_run.id = inventory.run_id
+                LEFT JOIN interface_samples AS sample
+                    ON sample.run_id = (
+                        SELECT MAX(previous.run_id)
+                        FROM interface_samples AS previous
+                        WHERE previous.interface_name = inventory.interface_name
+                          AND previous.router_interface_id IS inventory.router_interface_id
+                    )
+                   AND sample.interface_name = inventory.interface_name
+                   AND sample.router_interface_id IS inventory.router_interface_id
+                LEFT JOIN collection_runs AS sample_run ON sample_run.id = sample.run_id
+                WHERE inventory.run_id = (
+                    SELECT MAX(latest.run_id) FROM interface_inventory AS latest
                 )
-                ORDER BY s.interface_name
+                ORDER BY inventory.interface_name
                 """
             ).fetchall()
         return [dict(row) for row in rows]
@@ -296,6 +342,7 @@ class SQLiteStore:
         system: dict[str, Any] | None,
         interfaces: list[dict[str, Any]],
         connectivity: list[dict[str, Any]],
+        interface_inventory: list[dict[str, Any]] | None = None,
     ) -> None:
         uptime_seconds = system.get("uptime_seconds") if system is not None else None
         with closing(self._connect()) as connection, connection:
@@ -348,6 +395,26 @@ class SQLiteStore:
                         sample["tx_bits_per_second"],
                     )
                     for sample in interfaces
+                ],
+            )
+            connection.executemany(
+                """
+                INSERT INTO interface_inventory (
+                    run_id, interface_name, router_interface_id, interface_type,
+                    comment, running, disabled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run_id,
+                        interface["interface_name"],
+                        interface["router_interface_id"],
+                        interface["interface_type"],
+                        interface["comment"],
+                        _optional_bool(interface["running"]),
+                        _optional_bool(interface["disabled"]),
+                    )
+                    for interface in (interface_inventory or [])
                 ],
             )
             connection.executemany(

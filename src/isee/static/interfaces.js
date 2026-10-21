@@ -21,29 +21,35 @@ function renderDetails() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.className = "empty-cell";
-    cell.colSpan = 6;
-    cell.textContent = "No interface samples are available.";
+    cell.colSpan = 7;
+    cell.textContent = "No interface inventory is available yet.";
     row.append(cell);
     body.append(row);
     return;
   }
   for (const item of interfaces) {
     const row = document.createElement("tr");
-    for (const value of [item.name, item.type]) {
+    for (const value of [item.name, item.comment || "—", item.type]) {
       const cell = document.createElement("td");
       cell.textContent = value;
       row.append(cell);
     }
     const link = document.createElement("td");
-    link.append(makeBadge(item.running === null ? "unknown" : item.running ? "up" : "down", item.running === null ? "unknown" : item.running ? "available" : "unavailable"));
+    const linkStatus =
+      item.running === null ? "unknown" : item.running ? "available" : "unavailable";
+    link.append(
+      makeBadge(item.running === null ? "unknown" : item.running ? "up" : "down", linkStatus),
+    );
     const rx = document.createElement("td");
     rx.textContent = formatBytes(item.rx_bytes);
     const tx = document.createElement("td");
     tx.textContent = formatBytes(item.tx_bytes);
     const rate = document.createElement("td");
-    rate.textContent = item.rate_valid
-      ? `${formatRate(item.rx_bits_per_second)} RX · ${formatRate(item.tx_bits_per_second)} TX`
-      : item.rate_reason?.replaceAll("_", " ") ?? "Rate unavailable";
+    rate.textContent = !item.monitored
+      ? "Not monitored"
+      : item.rate_valid
+        ? `${formatRate(item.rx_bits_per_second)} RX · ${formatRate(item.tx_bits_per_second)} TX`
+        : item.rate_reason?.replaceAll("_", " ") ?? "Rate unavailable";
     row.append(link, rx, tx, rate);
     body.append(row);
   }
@@ -53,22 +59,25 @@ function renderSelector() {
   const selector = document.getElementById("interface-select");
   const previous = selectedName;
   selector.replaceChildren();
-  for (const item of interfaces) {
+  const monitoredInterfaces = interfaces.filter((item) => item.monitored);
+  for (const item of monitoredInterfaces) {
     const option = document.createElement("option");
     option.value = item.name;
-    option.textContent = item.name;
+    option.textContent = item.comment ? `${item.name} — ${item.comment}` : item.name;
     selector.append(option);
   }
-  selector.disabled = interfaces.length === 0;
-  if (interfaces.length === 0) {
+  selector.disabled = monitoredInterfaces.length === 0;
+  if (monitoredInterfaces.length === 0) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "No interface samples";
+    option.textContent = "No monitored interfaces";
     selector.append(option);
     selectedName = "";
     return;
   }
-  selectedName = interfaces.some((item) => item.name === previous) ? previous : interfaces[0].name;
+  selectedName = monitoredInterfaces.some((item) => item.name === previous)
+    ? previous
+    : monitoredInterfaces[0].name;
   selector.value = selectedName;
 }
 
@@ -120,8 +129,8 @@ async function refresh() {
     renderSelector();
     await renderHistory();
     document.getElementById("interface-chart-note").textContent = selectedName
-      ? `${selectedName} · ${selectedHours}h · latest sample ${formatAge(interfaces.find((item) => item.name === selectedName)?.sampled_at)}. Rates are averaged into chart buckets.`
-      : "Rates are averaged into at most 1,000 chart buckets. Missing and invalid rates remain gaps.";
+      ? `${selectedName} · ${selectedHours}h · latest rate sample ${formatAge(interfaces.find((item) => item.name === selectedName)?.rates_sampled_at)}. Rates are averaged into chart buckets.`
+      : "No monitored interfaces. Select interfaces in collection.interfaces to collect rates.";
     setError("interfaces-error", null);
   } catch (error) {
     setError("interfaces-error", error);

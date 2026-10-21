@@ -29,6 +29,7 @@ INTERFACES = [
         ".id": "*1",
         "name": "ether1",
         "type": "ether",
+        "comment": "WAN",
         "running": "true",
         "disabled": "false",
         "rx-byte": "1000",
@@ -42,6 +43,7 @@ INTERFACES = [
         ".id": "*2",
         "name": "bridge",
         "type": "bridge",
+        "comment": "LAN",
         "running": "true",
         "disabled": "false",
         "rx-byte": "3000",
@@ -75,7 +77,7 @@ def test_discover_reads_system_and_interface_data_using_get_only() -> None:
             return httpx.Response(200, json=SYSTEM_RESOURCE)
         if request.url.path == "/rest/interface":
             assert request.url.params[".proplist"] == (
-                ".id,name,type,running,disabled,rx-byte,tx-byte,rx-packet,tx-packet,"
+                ".id,name,type,comment,running,disabled,rx-byte,tx-byte,rx-packet,tx-packet,"
                 "rx-error,tx-error"
             )
             return httpx.Response(200, json=INTERFACES)
@@ -100,6 +102,7 @@ def test_discover_reads_system_and_interface_data_using_get_only() -> None:
     assert [interface.name for interface in snapshot.interfaces] == ["ether1", "bridge"]
     assert snapshot.interfaces[0].running is True
     assert snapshot.interfaces[0].disabled is False
+    assert snapshot.interfaces[0].comment == "WAN"
     assert snapshot.interfaces[0].rx_bytes == 1000
     assert snapshot.interfaces[0].tx_bytes == 2000
     assert snapshot.interfaces[0].rx_errors == 0
@@ -249,6 +252,7 @@ def test_interface_counter_fields_can_be_missing() -> None:
     assert interface.rx_bytes is None
     assert interface.tx_bytes is None
     assert interface.rx_packets is None
+    assert interface.comment is None
 
 
 def test_interface_counter_fields_reject_invalid_values() -> None:
