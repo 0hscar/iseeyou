@@ -20,4 +20,6 @@ if (page === "overview") {
   import("./interfaces.js").then(({ startInterfaces }) => startInterfaces());
 } else if (page === "connectivity") {
   import("./connectivity.js").then(({ startConnectivity }) => startConnectivity());
+} else if (page === "devices") {
+  import("./devices.js").then(({ startDevices }) => startDevices());
 }

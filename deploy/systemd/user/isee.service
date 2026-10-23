@@ -1,0 +1,26 @@
+[Unit]
+Description=iSeeYou network monitoring
+
+[Service]
+Type=simple
+WorkingDirectory=%h/code/iseeyou
+Environment=ISEE_CONFIG=%h/code/iseeyou/config.toml
+EnvironmentFile=%h/.config/isee/router.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=%h/code/iseeyou/.venv/bin/isee
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=%h/code/iseeyou/data
+
+[Install]
+WantedBy=default.target

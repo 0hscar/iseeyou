@@ -10,7 +10,7 @@ from typing import Any
 from isee_network.metrics import CounterSample
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class SQLiteStore:
@@ -144,6 +144,39 @@ class SQLiteStore:
                     COMMIT;
                     """
                 )
+                version = 3
+            if version == 3:
+                connection.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+
+                    CREATE TABLE IF NOT EXISTS device_inventory_snapshot (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        run_id INTEGER NOT NULL REFERENCES collection_runs(id),
+                        sampled_at TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS connected_devices (
+                        mac_address TEXT PRIMARY KEY,
+                        interface_name TEXT NOT NULL,
+                        bridge_name TEXT,
+                        vlan_id INTEGER,
+                        bridge_age TEXT,
+                        host_name TEXT,
+                        dhcp_server TEXT
+                    );
+
+                    CREATE TABLE IF NOT EXISTS connected_device_addresses (
+                        mac_address TEXT NOT NULL REFERENCES connected_devices(mac_address)
+                            ON DELETE CASCADE,
+                        ip_address TEXT NOT NULL,
+                        PRIMARY KEY (mac_address, ip_address)
+                    );
+
+                    PRAGMA user_version = 4;
+                    COMMIT;
+                    """
+                )
 
     def latest_interface_samples(
         self,
@@ -236,6 +269,50 @@ class SQLiteStore:
                 """
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def latest_connected_devices(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection, connection:
+            snapshot = connection.execute(
+                """
+                SELECT sampled_at
+                FROM device_inventory_snapshot
+                WHERE id = 1
+                """
+            ).fetchone()
+            rows = connection.execute(
+                """
+                SELECT device.mac_address, device.interface_name, device.bridge_name,
+                       device.vlan_id, device.bridge_age, device.host_name,
+                       device.dhcp_server, address.ip_address
+                FROM connected_devices AS device
+                LEFT JOIN connected_device_addresses AS address
+                    ON address.mac_address = device.mac_address
+                ORDER BY device.interface_name, device.mac_address, address.ip_address
+                """
+            ).fetchall()
+
+        devices: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            device = devices.setdefault(
+                row["mac_address"],
+                {
+                    "mac_address": row["mac_address"],
+                    "interface_name": row["interface_name"],
+                    "bridge_name": row["bridge_name"],
+                    "vlan_id": row["vlan_id"],
+                    "bridge_age": row["bridge_age"],
+                    "host_name": row["host_name"],
+                    "dhcp_server": row["dhcp_server"],
+                    "ip_addresses": [],
+                },
+            )
+            if row["ip_address"] is not None:
+                device["ip_addresses"].append(row["ip_address"])
+
+        return {
+            "sampled_at": snapshot["sampled_at"] if snapshot is not None else None,
+            "devices": list(devices.values()),
+        }
 
     def interface_history(
         self,
@@ -343,6 +420,7 @@ class SQLiteStore:
         interfaces: list[dict[str, Any]],
         connectivity: list[dict[str, Any]],
         interface_inventory: list[dict[str, Any]] | None = None,
+        connected_devices: list[dict[str, Any]] | None = None,
     ) -> None:
         uptime_seconds = system.get("uptime_seconds") if system is not None else None
         with closing(self._connect()) as connection, connection:
@@ -417,6 +495,49 @@ class SQLiteStore:
                     for interface in (interface_inventory or [])
                 ],
             )
+            if router_status == "ok":
+                connection.execute("DELETE FROM connected_devices")
+                connection.executemany(
+                    """
+                    INSERT INTO connected_devices (
+                        mac_address, interface_name, bridge_name, vlan_id, bridge_age,
+                        host_name, dhcp_server
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            device["mac_address"],
+                            device["interface_name"],
+                            device["bridge_name"],
+                            device["vlan_id"],
+                            device["age"],
+                            device["host_name"],
+                            device["dhcp_server"],
+                        )
+                        for device in (connected_devices or [])
+                    ],
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO connected_device_addresses (mac_address, ip_address)
+                    VALUES (?, ?)
+                    """,
+                    [
+                        (device["mac_address"], ip_address)
+                        for device in (connected_devices or [])
+                        for ip_address in device["ip_addresses"]
+                    ],
+                )
+                connection.execute(
+                    """
+                    INSERT INTO device_inventory_snapshot (id, run_id, sampled_at)
+                    VALUES (1, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        run_id = excluded.run_id,
+                        sampled_at = excluded.sampled_at
+                    """,
+                    (run_id, router_sampled_at or completed_at),
+                )
             connection.executemany(
                 """
                 INSERT INTO connectivity_samples (

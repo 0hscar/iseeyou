@@ -105,7 +105,7 @@ def test_router_settings_reject_invalid_values(document: dict[str, object]) -> N
 
 def test_collection_settings_defaults_and_connectivity_target() -> None:
     settings = CollectionSettings(
-        targets=[ConnectivityTarget(name="gateway", host="192.168.88.1", port=443)]
+        targets=[ConnectivityTarget(name="gateway", host="192.0.2.1", port=443)]
     )
 
     assert settings.interval_seconds == 10

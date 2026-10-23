@@ -64,6 +64,18 @@ def _save_sample(
                 "disabled": False,
             },
         ],
+        connected_devices=[
+            {
+                "mac_address": "AA:BB:CC:DD:EE:01",
+                "interface_name": "lan-port",
+                "bridge_name": "bridge",
+                "vlan_id": 10,
+                "age": "00:00:12",
+                "ip_addresses": ["192.0.2.50"],
+                "host_name": "workstation",
+                "dhcp_server": "lan-dhcp",
+            }
+        ],
         connectivity=[
             {
                 "target_name": "gateway",
@@ -95,6 +107,7 @@ def test_dashboard_pages_and_local_assets_are_served(tmp_path: Path) -> None:
                     client.get("/"),
                     client.get("/interfaces"),
                     client.get("/connectivity"),
+                    client.get("/devices"),
                     client.get("/static/app.css"),
                     client.get("/static/vendor/uplot/uPlot.iife.min.js"),
                 )
@@ -106,8 +119,9 @@ def test_dashboard_pages_and_local_assets_are_served(tmp_path: Path) -> None:
     assert "Interfaces" in responses[1].text
     assert "Comment" in responses[1].text
     assert "Connectivity" in responses[2].text
-    assert "--page:" in responses[3].text
-    assert len(responses[4].content) > 10_000
+    assert "Connected devices" in responses[3].text
+    assert "--page:" in responses[4].text
+    assert len(responses[5].content) > 10_000
 
 
 def test_dashboard_api_returns_samples_and_derived_outage_history(
@@ -137,6 +151,7 @@ def test_dashboard_api_returns_samples_and_derived_outage_history(
             ) as client:
                 responses = await asyncio.gather(
                     client.get("/api/network/overview"),
+                    client.get("/api/network/devices"),
                     client.get("/api/network/interfaces/history?name=ether1&hours=24"),
                     client.get("/api/network/connectivity/history?name=gateway&hours=24"),
                     client.get("/api/network/connectivity/outages?name=gateway&hours=24"),
@@ -144,7 +159,14 @@ def test_dashboard_api_returns_samples_and_derived_outage_history(
                 )
                 return dict(
                     zip(
-                        ("overview", "interfaces", "connectivity", "outages", "invalid_range"),
+                        (
+                            "overview",
+                            "devices",
+                            "interfaces",
+                            "connectivity",
+                            "outages",
+                            "invalid_range",
+                        ),
                         responses,
                         strict=True,
                     )
@@ -152,6 +174,7 @@ def test_dashboard_api_returns_samples_and_derived_outage_history(
 
     responses = asyncio.run(request_dashboard())
     overview = responses["overview"].json()
+    devices = responses["devices"].json()
 
     assert responses["overview"].status_code == 200
     assert overview["router"]["status"] == "available"
@@ -165,8 +188,14 @@ def test_dashboard_api_returns_samples_and_derived_outage_history(
     assert overview["connectivity"][0]["status"] == "reachable"
     assert len(overview["recent_outages"]) == 1
     assert overview["recent_outages"][0]["ongoing"] is False
+    assert devices["status"] == "fresh"
+    assert devices["devices"][0]["host_name"] == "workstation"
+    assert devices["devices"][0]["ip_addresses"] == ["192.0.2.50"]
     assert responses["interfaces"].json()["points"][0]["rate_valid"] is True
-    assert responses["connectivity"].json()["points"][0]["latency_ms"] == 12.5
+    assert any(
+        point["latency_ms"] == 12.5
+        for point in responses["connectivity"].json()["points"]
+    )
     outage_history = responses["outages"].json()
     assert len(outage_history) == 1
     assert outage_history[0]["ongoing"] is False
@@ -178,16 +207,21 @@ def test_dashboard_empty_state_does_not_invent_measurements(tmp_path: Path) -> N
         Settings(collection={"database_path": tmp_path / "network.sqlite3"})
     )
 
-    async def request_empty() -> httpx.Response:
+    async def request_empty() -> tuple[httpx.Response, httpx.Response]:
         async with application.router.lifespan_context(application):
             transport = httpx.ASGITransport(app=application)
             async with httpx.AsyncClient(
                 transport=transport,
                 base_url="http://test",
             ) as client:
-                return await client.get("/api/network/overview")
+                return tuple(
+                    await asyncio.gather(
+                        client.get("/api/network/overview"),
+                        client.get("/api/network/devices"),
+                    )
+                )
 
-    response = asyncio.run(request_empty())
+    response, devices_response = asyncio.run(request_empty())
     payload = response.json()
 
     assert response.status_code == 200
@@ -195,3 +229,8 @@ def test_dashboard_empty_state_does_not_invent_measurements(tmp_path: Path) -> N
     assert payload["router"]["cpu_load_percent"] is None
     assert payload["interfaces"] == []
     assert payload["connectivity"] == []
+    assert devices_response.json() == {
+        "status": "unknown",
+        "sampled_at": None,
+        "devices": [],
+    }

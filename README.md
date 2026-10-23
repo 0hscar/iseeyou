@@ -41,9 +41,11 @@ The Interfaces inventory lists every interface reported by RouterOS, including i
 
 The initial connectivity implementation measures TCP connection success, connection latency, and failed-probe percentage for each configured host and port. It is not an ICMP ping and does not by itself prove internet availability.
 
-The dashboard exposes `/`, `/interfaces`, and `/connectivity`. It provides bounded history queries over the latest 1, 6, 24, or 168 hours and derives unreachable periods from consecutive samples where every TCP probe to a target failed. These are derived windows, not persisted outage events; they are not ICMP packet-loss measurements or proof of an internet outage. History is downsampled to at most approximately 1,000 points per chart.
+The dashboard exposes `/`, `/interfaces`, `/connectivity`, and `/devices`. It provides bounded history queries over the latest 1, 6, 24, or 168 hours and derives unreachable periods from consecutive samples where every TCP probe to a target failed. These are derived windows, not persisted outage events; they are not ICMP packet-loss measurements or proof of an internet outage. History is downsampled to at most approximately 1,000 points per chart.
 
-Phase 3 collection and SQLite persistence are implemented, and live `ether1` counter-derived rates have been verified. Connectivity probes are opt-in. True packet-loss measurement, durable outage-event records, authentication, and remote-access configuration are not implemented. Keep the dashboard on localhost or behind a separately secured trusted network; do not expose the default unauthenticated dashboard directly to the public internet.
+The `/devices` view lists dynamic MAC addresses currently learned by the RouterOS bridge, enriched with matching ARP IP addresses and bound DHCP hostname/server data. It is a recent bridge-learning inventory, not a definitive online/offline detector: entries may remain until the bridge ageing timer expires, and clients behind another switch or access point can appear on that uplink.
+
+Phase 3 collection and SQLite persistence are implemented, and live `ether1` counter-derived rates have been verified. Connectivity probes are opt-in. True packet-loss measurement and durable outage-event records are not implemented. For a local systemd deployment with authenticated LAN access, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Do not expose the default unauthenticated application port directly to an untrusted network.
 
 ## Configuration
 

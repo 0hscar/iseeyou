@@ -42,6 +42,23 @@ class InterfaceOverview(BaseModel):
     tx_bytes: int | None
 
 
+class ConnectedDevice(BaseModel):
+    mac_address: str
+    interface_name: str
+    bridge_name: str | None
+    vlan_id: int | None
+    bridge_age: str | None
+    host_name: str | None
+    dhcp_server: str | None
+    ip_addresses: list[str]
+
+
+class ConnectedDevicesResponse(BaseModel):
+    status: Literal["unknown", "fresh", "stale"]
+    sampled_at: str | None
+    devices: list[ConnectedDevice]
+
+
 class ConnectivityOverview(BaseModel):
     name: str
     host: str
@@ -121,6 +138,15 @@ def connectivity_page(request: Request) -> HTMLResponse:
         request=request,
         name="connectivity.html",
         context={"page": "connectivity", "title": "Connectivity"},
+    )
+
+
+@router.get("/devices", response_class=HTMLResponse, include_in_schema=False)
+def devices_page(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request=request,
+        name="devices.html",
+        context={"page": "devices", "title": "Devices"},
     )
 
 
@@ -205,6 +231,27 @@ def list_interfaces(request: Request) -> list[InterfaceOverview]:
         _interface_overview(row, now, interval)
         for row in _store(request).latest_interface_records()
     ]
+
+
+@router.get(
+    "/api/network/devices",
+    response_model=ConnectedDevicesResponse,
+    tags=["network"],
+)
+def list_connected_devices(request: Request) -> ConnectedDevicesResponse:
+    now = datetime.now(timezone.utc)
+    interval = request.app.state.settings.collection.interval_seconds
+    inventory = _store(request).latest_connected_devices()
+    sampled_at = inventory["sampled_at"]
+    status = _freshness(sampled_at, now, interval)
+    return ConnectedDevicesResponse(
+        status=status,
+        sampled_at=sampled_at,
+        devices=[
+            ConnectedDevice(**device)
+            for device in inventory["devices"]
+        ],
+    )
 
 
 @router.get(

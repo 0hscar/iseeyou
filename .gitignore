@@ -8,6 +8,9 @@ htmlcov/
 build/
 dist/
 config.toml
+.env
+.env.*
+!.env.example
 *.db
 *.sqlite
 *.sqlite3

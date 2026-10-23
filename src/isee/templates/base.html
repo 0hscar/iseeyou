@@ -44,6 +44,14 @@
             <span class="nav-icon" aria-hidden="true">◎</span>
             <span>Connectivity</span>
           </a>
+          <a
+            class="nav-link{% if page == 'devices' %} is-active{% endif %}"
+            href="/devices"
+            {% if page == 'devices' %}aria-current="page"{% endif %}
+          >
+            <span class="nav-icon" aria-hidden="true">⌘</span>
+            <span>Devices</span>
+          </a>
         </nav>
         <div class="sidebar-footer">
           <span class="status-indicator" aria-hidden="true"></span>

@@ -289,6 +289,22 @@ h2 {
   font-size: 12px;
 }
 
+.inventory-status {
+  margin-top: 22px;
+}
+
+.device-secondary {
+  display: block;
+  margin-top: 4px;
+  color: var(--subtle);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.device-disclaimer {
+  margin: 0 2px;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

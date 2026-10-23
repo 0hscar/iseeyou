@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Network</p>
+      <h1>Connected devices</h1>
+      <p class="page-description">Devices recently learned by the router’s bridge, enriched with IP and DHCP details when available.</p>
+    </div>
+    <div class="inventory-status" id="device-inventory-status">Waiting for router data…</div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">LAN inventory</p>
+        <h2 id="device-count">Devices</h2>
+      </div>
+      <span class="freshness-label" id="device-updated-at">Not collected yet</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Device</th>
+            <th scope="col">IP address</th>
+            <th scope="col">MAC address</th>
+            <th scope="col">Router port</th>
+            <th scope="col">VLAN</th>
+            <th scope="col">Bridge age</th>
+            <th scope="col">DHCP server</th>
+          </tr>
+        </thead>
+        <tbody id="device-rows">
+          <tr><td class="empty-cell" colspan="7">Waiting for a successful router poll…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="panel-note device-disclaimer">
+    This is a bridge MAC table, not a definitive online/offline list. A learned entry can remain until RouterOS’s bridge ageing timer expires. Devices behind a switch or access point may appear under that uplink instead of their individual physical port. IP addresses and hostnames are shown only when RouterOS can match ARP or a bound DHCP lease to the MAC address.
+  </p>
+  <p class="inline-error" id="devices-error" role="status" hidden></p>
+{% endblock %}

@@ -1,0 +1,18 @@
+{
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://{$ISEE_DASHBOARD_ADDRESS}:8443 {
+	tls internal
+
+	@trusted remote_ip {$ISEE_TRUSTED_CIDRS}
+	handle @trusted {
+		basic_auth {
+			{$ISEE_DASHBOARD_USER} {$ISEE_DASHBOARD_PASSWORD_HASH}
+		}
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	respond "Forbidden" 403
+}

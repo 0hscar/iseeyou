@@ -242,11 +242,11 @@ The live `ether1` counters and calculated rates have been verified against the c
 
 **Phase 4 — Dashboard (implementation complete)**
 
-- [x] Implement Overview, Interfaces and Connectivity views with modular navigation.
+- [x] Implement Overview, Interfaces, Connectivity and connected-device views with modular navigation.
 - [x] Add locally hosted interactive history graphs, bounded time-range selection and derived unreachable-period history.
 - [x] Distinguish unavailable, stale, invalid and missing data from healthy readings.
 
-The dashboard is served by FastAPI/Jinja2 with plain CSS and JavaScript and locally vendored uPlot assets. It introduces no separate frontend service or external CDN dependency. The interface inventory shows all RouterOS interfaces and their comments; `collection.interfaces` independently controls which interfaces receive stored counter/rate history. Derived unreachable periods indicate consecutive fully failed TCP probe cycles only; they are not ICMP packet loss or persisted outage events. The dashboard has no authentication and must remain on localhost or an appropriately secured trusted network.
+The dashboard is served by FastAPI/Jinja2 with plain CSS and JavaScript and locally vendored uPlot assets. It introduces no separate frontend service or external CDN dependency. The interface inventory shows all RouterOS interfaces and their comments; `collection.interfaces` independently controls which interfaces receive stored counter/rate history. The Devices view combines dynamic RouterOS bridge host entries with matching ARP addresses and bound DHCP lease hostnames. Bridge host ageing means entries can outlive active traffic; clients behind a downstream switch or access point are attributed to that uplink. Derived unreachable periods indicate consecutive fully failed TCP probe cycles only; they are not ICMP packet loss or persisted outage events. The dashboard has no authentication and must remain on localhost or an appropriately secured trusted network.
 
 **Phase 5 — Operational readiness**
 
