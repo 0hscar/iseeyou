@@ -1,0 +1,26 @@
+[Unit]
+Description=Caddy LAN reverse proxy for iSeeYou
+After=isee.service
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/isee/caddy.env
+ExecStartPre=/usr/bin/caddy validate --config %h/.config/isee/Caddyfile --adapter caddyfile
+ExecStart=/usr/bin/caddy run --config %h/.config/isee/Caddyfile --adapter caddyfile
+ExecReload=/usr/bin/caddy reload --config %h/.config/isee/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=%h/.config/caddy %h/.local/share/caddy
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>{{ title }} · iSeeYou</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='vendor/uplot/uPlot.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+    <script src="{{ url_for('static', path='vendor/uplot/uPlot.iife.min.js') }}"></script>
+    <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
+  </head>
+  <body data-page="{{ page }}">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="app-shell">
+      <aside class="sidebar" id="primary-sidebar">
+        <a class="brand" href="/" aria-label="iSeeYou home">
+          <span class="brand-mark" aria-hidden="true">iY</span>
+          <span class="brand-name">iSeeYou</span>
+        </a>
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <p class="nav-section-label">Network</p>
+          <a
+            class="nav-link{% if page == 'overview' %} is-active{% endif %}"
+            href="/"
+            {% if page == 'overview' %}aria-current="page"{% endif %}
+          >
+            <span class="nav-icon" aria-hidden="true">◫</span>
+            <span>Overview</span>
+          </a>
+          <a
+            class="nav-link{% if page == 'interfaces' %} is-active{% endif %}"
+            href="/interfaces"
+            {% if page == 'interfaces' %}aria-current="page"{% endif %}
+          >
+            <span class="nav-icon" aria-hidden="true">↔</span>
+            <span>Interfaces</span>
+          </a>
+          <a
+            class="nav-link{% if page == 'connectivity' %} is-active{% endif %}"
+            href="/connectivity"
+            {% if page == 'connectivity' %}aria-current="page"{% endif %}
+          >
+            <span class="nav-icon" aria-hidden="true">◎</span>
+            <span>Connectivity</span>
+          </a>
+          <a
+            class="nav-link{% if page == 'devices' %} is-active{% endif %}"
+            href="/devices"
+            {% if page == 'devices' %}aria-current="page"{% endif %}
+          >
+            <span class="nav-icon" aria-hidden="true">⌘</span>
+            <span>Devices</span>
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <span class="status-indicator" aria-hidden="true"></span>
+          <span>Self-hosted</span>
+        </div>
+      </aside>
+      <div class="main-column">
+        <header class="topbar">
+          <button
+            class="sidebar-toggle"
+            id="sidebar-toggle"
+            type="button"
+            aria-controls="primary-sidebar"
+            aria-expanded="false"
+          >
+            <span aria-hidden="true">☰</span>
+            <span class="visually-hidden">Toggle navigation</span>
+          </button>
+          <div class="breadcrumb">
+            <span>iSeeNetwork</span>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span>{{ title }}</span>
+          </div>
+          <div class="topbar-status" id="topbar-status">Loading status…</div>
+        </header>
+        <main id="main-content" class="content">
+          {% block content %}{% endblock %}
+        </main>
+        <footer class="page-footer">
+          <span>iSeeYou · Local network monitoring</span>
+          <a href="/health/collector">Collector health</a>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

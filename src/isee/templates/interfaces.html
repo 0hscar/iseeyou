@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Network</p>
+      <h1>Interfaces</h1>
+      <p class="page-description">Counter-derived traffic rates. RX and TX are router-relative directions.</p>
+    </div>
+  </div>
+
+  <section class="panel chart-panel">
+    <div class="chart-toolbar">
+      <div class="field-group">
+        <label for="interface-select">Interface</label>
+        <select id="interface-select" disabled>
+          <option value="">Waiting for interfaces…</option>
+        </select>
+      </div>
+      <div class="range-control" role="group" aria-label="Chart time range">
+        <button type="button" data-hours="1">1h</button>
+        <button type="button" data-hours="6">6h</button>
+        <button type="button" data-hours="24" aria-pressed="true">24h</button>
+        <button type="button" data-hours="168">7d</button>
+      </div>
+    </div>
+    <div class="chart-legend">
+      <span><i class="legend-swatch rx-swatch"></i>RX · received by router</span>
+      <span><i class="legend-swatch tx-swatch"></i>TX · sent by router</span>
+    </div>
+    <div class="chart-frame" id="interface-chart" role="img" aria-label="Interface receive and transmit rates over time"></div>
+    <p class="chart-empty" id="interface-empty">No valid rate samples are available for this range.</p>
+    <p class="panel-note" id="interface-chart-note">Rates are averaged into at most 1,000 chart buckets. Missing and invalid rates remain gaps.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Inventory</p>
+        <h2>Latest interface readings</h2>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Interface</th>
+            <th scope="col">Comment</th>
+            <th scope="col">Type</th>
+            <th scope="col">Link</th>
+            <th scope="col">Cumulative RX</th>
+            <th scope="col">Cumulative TX</th>
+            <th scope="col">Rate state</th>
+          </tr>
+        </thead>
+        <tbody id="interface-details">
+          <tr><td class="empty-cell" colspan="7">Waiting for interface samples…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <p class="inline-error" id="interfaces-error" role="status" hidden></p>
+{% endblock %}

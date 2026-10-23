@@ -80,6 +80,8 @@ class NetworkCollector:
         connectivity_results = await self._probe_targets()
         completed = datetime.now(timezone.utc)
         interface_samples: list[dict[str, Any]] = []
+        interface_inventory: list[dict[str, Any]] = []
+        connected_devices: list[dict[str, Any]] = []
         system: dict[str, Any] | None = None
 
         if router_snapshot is not None:
@@ -92,6 +94,30 @@ class NetworkCollector:
                 "free_memory_bytes": router_snapshot.system.free_memory_bytes,
                 "total_memory_bytes": router_snapshot.system.total_memory_bytes,
             }
+            interface_inventory = [
+                {
+                    "interface_name": interface.name,
+                    "router_interface_id": interface.router_id,
+                    "interface_type": interface.type,
+                    "comment": interface.comment,
+                    "running": interface.running,
+                    "disabled": interface.disabled,
+                }
+                for interface in router_snapshot.interfaces
+            ]
+            connected_devices = [
+                {
+                    "mac_address": device.mac_address,
+                    "interface_name": device.interface_name,
+                    "bridge_name": device.bridge_name,
+                    "vlan_id": device.vlan_id,
+                    "age": device.age,
+                    "ip_addresses": list(device.ip_addresses),
+                    "host_name": device.host_name,
+                    "dhcp_server": device.dhcp_server,
+                }
+                for device in router_snapshot.connected_devices
+            ]
             selected_interfaces = [
                 interface
                 for interface in router_snapshot.interfaces
@@ -149,7 +175,9 @@ class NetworkCollector:
             router_error=router_error,
             system=system,
             interfaces=interface_samples,
+            interface_inventory=interface_inventory,
             connectivity=connectivity_samples,
+            connected_devices=connected_devices,
         )
 
         if router_snapshot is None:

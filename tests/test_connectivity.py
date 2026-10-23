@@ -23,7 +23,7 @@ def test_tcp_probe_reports_connection_latency_and_closes_writer(monkeypatch) -> 
         return object(), writer
 
     monkeypatch.setattr(connectivity.asyncio, "open_connection", open_connection)
-    target = ConnectivityTarget(name="gateway", host="192.168.88.1", port=443)
+    target = ConnectivityTarget(name="gateway", host="192.0.2.1", port=443)
 
     result = asyncio.run(connectivity.tcp_probe(target, 1))
 
@@ -38,7 +38,7 @@ def test_tcp_probe_reports_timeout_without_latency(monkeypatch) -> None:
         raise TimeoutError
 
     monkeypatch.setattr(connectivity.asyncio, "open_connection", open_connection)
-    target = ConnectivityTarget(name="gateway", host="192.168.88.1", port=443)
+    target = ConnectivityTarget(name="gateway", host="192.0.2.1", port=443)
 
     result = asyncio.run(connectivity.tcp_probe(target, 0.01))
 

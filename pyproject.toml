@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
+    "jinja2>=3.1,<4",
     "pydantic>=2.6,<3",
     "uvicorn>=0.30,<1",
 ]
@@ -24,6 +25,9 @@ isee = "isee.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+isee = ["templates/*.html", "static/*.css", "static/*.js", "static/vendor/uplot/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

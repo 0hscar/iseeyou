@@ -3,10 +3,13 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from isee import __version__
+from isee.api.dashboard import router as dashboard_router
 from isee.api.health import router as health_router
 from isee.config import Settings, load_settings
 from isee.logging_config import configure_logging
@@ -14,6 +17,7 @@ from isee_network.collector import CollectorHealth, NetworkCollector
 from isee_network.storage import SQLiteStore
 
 LOGGER = logging.getLogger(__name__)
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,16 +29,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         task: asyncio.Task[None] | None = None
         stop_event = asyncio.Event()
+        password: str | None = None
         if active_settings.router is not None:
             password = os.environ.get("ISEE_ROUTER_PASSWORD")
             if not password:
                 raise RuntimeError(
                     "Set ISEE_ROUTER_PASSWORD before starting collection with a configured router"
                 )
-            store = SQLiteStore(active_settings.collection.database_path)
+        store = SQLiteStore(active_settings.collection.database_path)
+        application.state.store = store
+        if active_settings.router is not None:
             collector = NetworkCollector(
                 active_settings.router,
                 active_settings.collection,
@@ -59,7 +66,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(title="iSeeYou", version=__version__, lifespan=lifespan)
     application.state.settings = active_settings
     application.state.collector_health = collector_health
+    application.state.store = None
+    application.mount(
+        "/static",
+        StaticFiles(directory=STATIC_DIR),
+        name="static",
+    )
     application.include_router(health_router)
+    application.include_router(dashboard_router)
     return application
 
 

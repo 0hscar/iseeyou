@@ -29,6 +29,7 @@ INTERFACES = [
         ".id": "*1",
         "name": "ether1",
         "type": "ether",
+        "comment": "WAN",
         "running": "true",
         "disabled": "false",
         "rx-byte": "1000",
@@ -42,6 +43,7 @@ INTERFACES = [
         ".id": "*2",
         "name": "bridge",
         "type": "bridge",
+        "comment": "LAN",
         "running": "true",
         "disabled": "false",
         "rx-byte": "3000",
@@ -50,6 +52,44 @@ INTERFACES = [
         "tx-packet": "40",
         "rx-error": "0",
         "tx-error": "0",
+    },
+]
+BRIDGE_HOSTS = [
+    {
+        "mac-address": "AA:BB:CC:DD:EE:01",
+        "on-interface": "lan-port",
+        "bridge": "bridge",
+        "vid": "10",
+        "age": "00:00:12",
+        "dynamic": "true",
+        "local": "false",
+    },
+    {
+        "mac-address": "AA:BB:CC:DD:EE:02",
+        "on-interface": "bridge",
+        "bridge": "bridge",
+        "vid": "0",
+        "age": "00:00:01",
+        "dynamic": "true",
+        "local": "true",
+    },
+]
+ARP_ENTRIES = [
+    {
+        "address": "192.0.2.50",
+        "mac-address": "aa:bb:cc:dd:ee:01",
+        "status": "reachable",
+        "disabled": "false",
+        "invalid": "false",
+    },
+]
+DHCP_LEASES = [
+    {
+        "address": "192.0.2.50",
+        "mac-address": "AA:BB:CC:DD:EE:01",
+        "host-name": "workstation",
+        "status": "bound",
+        "server": "lan-dhcp",
     },
 ]
 
@@ -75,10 +115,25 @@ def test_discover_reads_system_and_interface_data_using_get_only() -> None:
             return httpx.Response(200, json=SYSTEM_RESOURCE)
         if request.url.path == "/rest/interface":
             assert request.url.params[".proplist"] == (
-                ".id,name,type,running,disabled,rx-byte,tx-byte,rx-packet,tx-packet,"
+                ".id,name,type,comment,running,disabled,rx-byte,tx-byte,rx-packet,tx-packet,"
                 "rx-error,tx-error"
             )
             return httpx.Response(200, json=INTERFACES)
+        if request.url.path == "/rest/interface/bridge/host":
+            assert request.url.params[".proplist"] == (
+                "mac-address,on-interface,bridge,vid,age,dynamic,local"
+            )
+            return httpx.Response(200, json=BRIDGE_HOSTS)
+        if request.url.path == "/rest/ip/arp":
+            assert request.url.params[".proplist"] == (
+                "address,mac-address,status,disabled,invalid"
+            )
+            return httpx.Response(200, json=ARP_ENTRIES)
+        if request.url.path == "/rest/ip/dhcp-server/lease":
+            assert request.url.params[".proplist"] == (
+                "address,mac-address,host-name,status,server"
+            )
+            return httpx.Response(200, json=DHCP_LEASES)
         return httpx.Response(404)
 
     async def discover():
@@ -100,10 +155,21 @@ def test_discover_reads_system_and_interface_data_using_get_only() -> None:
     assert [interface.name for interface in snapshot.interfaces] == ["ether1", "bridge"]
     assert snapshot.interfaces[0].running is True
     assert snapshot.interfaces[0].disabled is False
+    assert snapshot.interfaces[0].comment == "WAN"
     assert snapshot.interfaces[0].rx_bytes == 1000
     assert snapshot.interfaces[0].tx_bytes == 2000
     assert snapshot.interfaces[0].rx_errors == 0
-    assert [request.method for request in requests] == ["GET", "GET"]
+    assert [request.method for request in requests] == ["GET"] * 5
+    assert len(snapshot.connected_devices) == 1
+    device = snapshot.connected_devices[0]
+    assert device.mac_address == "AA:BB:CC:DD:EE:01"
+    assert device.interface_name == "lan-port"
+    assert device.bridge_name == "bridge"
+    assert device.vlan_id == 10
+    assert device.age == "00:00:12"
+    assert device.ip_addresses == ("192.0.2.50",)
+    assert device.host_name == "workstation"
+    assert device.dhcp_server == "lan-dhcp"
 
 
 def test_tls_certificate_and_hostname_verification_are_enabled() -> None:
@@ -249,6 +315,7 @@ def test_interface_counter_fields_can_be_missing() -> None:
     assert interface.rx_bytes is None
     assert interface.tx_bytes is None
     assert interface.rx_packets is None
+    assert interface.comment is None
 
 
 def test_interface_counter_fields_reject_invalid_values() -> None:
