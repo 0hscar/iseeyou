@@ -1,4 +1,6 @@
 import asyncio
+import gzip
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -108,7 +110,9 @@ def test_dashboard_pages_and_local_assets_are_served(tmp_path: Path) -> None:
                     client.get("/interfaces"),
                     client.get("/connectivity"),
                     client.get("/devices"),
+                    client.get("/storage"),
                     client.get("/static/app.css"),
+                    client.get("/static/storage.js"),
                     client.get("/static/vendor/uplot/uPlot.iife.min.js"),
                 )
 
@@ -120,8 +124,10 @@ def test_dashboard_pages_and_local_assets_are_served(tmp_path: Path) -> None:
     assert "Comment" in responses[1].text
     assert "Connectivity" in responses[2].text
     assert "Connected devices" in responses[3].text
-    assert "--page:" in responses[4].text
-    assert len(responses[5].content) > 10_000
+    assert "Storage" in responses[4].text
+    assert "--page:" in responses[5].text
+    assert "loadStorage" in responses[6].text
+    assert len(responses[7].content) > 10_000
 
 
 def test_dashboard_api_returns_samples_and_derived_outage_history(
@@ -234,3 +240,75 @@ def test_dashboard_empty_state_does_not_invent_measurements(tmp_path: Path) -> N
         "sampled_at": None,
         "devices": [],
     }
+
+
+def test_storage_dashboard_exports_and_protects_recent_history(tmp_path: Path) -> None:
+    application = create_app(
+        Settings(collection={"database_path": tmp_path / "network.sqlite3"})
+    )
+    now = datetime.now(timezone.utc)
+    old_sample = now - timedelta(days=45)
+    recent_sample = now - timedelta(days=5)
+
+    async def request_storage():
+        async with application.router.lifespan_context(application):
+            _save_sample(application.state.store, old_sample, probes_succeeded=3)
+            _save_sample(application.state.store, recent_sample, probes_succeeded=3)
+            transport = httpx.ASGITransport(app=application)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                page = await client.get("/storage")
+                usage = await client.get("/api/storage/usage")
+                export = await client.get(
+                    "/api/storage/export",
+                    params={
+                        "from": old_sample.date().isoformat(),
+                        "through": recent_sample.date().isoformat(),
+                    },
+                )
+                reversed_export = await client.get(
+                    "/api/storage/export",
+                    params={
+                        "from": now.date().isoformat(),
+                        "through": old_sample.date().isoformat(),
+                    },
+                )
+                protected_delete = await client.post(
+                    "/api/storage/delete",
+                    json={
+                        "before": (now - timedelta(days=10)).date().isoformat(),
+                        "confirmation": "DELETE",
+                    },
+                )
+                delete = await client.post(
+                    "/api/storage/delete",
+                    json={
+                        "before": (now - timedelta(days=30)).date().isoformat(),
+                        "confirmation": "DELETE",
+                    },
+                )
+            return page, usage, export, reversed_export, protected_delete, delete
+
+    page, usage_response, export_response, reversed_export, protected_delete, delete = (
+        asyncio.run(request_storage())
+    )
+    usage = usage_response.json()
+    records = [
+        json.loads(line)
+        for line in gzip.decompress(export_response.content).splitlines()
+    ]
+
+    assert page.status_code == 200
+    assert "Delete old history" in page.text
+    assert usage_response.status_code == 200
+    assert usage["database_bytes"] > 0
+    assert sum(month["runs"] for month in usage["months"]) == 2
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"] == "application/gzip"
+    assert any(record["record_type"] == "interface_samples" for record in records)
+    assert reversed_export.status_code == 422
+    assert protected_delete.status_code == 400
+    assert delete.status_code == 200
+    assert delete.json()["deleted_runs"] == 1

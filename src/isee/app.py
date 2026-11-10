@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from isee import __version__
 from isee.api.dashboard import router as dashboard_router
 from isee.api.health import router as health_router
+from isee.api.storage import router as storage_router
 from isee.config import Settings, load_settings
 from isee.logging_config import configure_logging
 from isee_network.collector import CollectorHealth, NetworkCollector
@@ -74,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(health_router)
     application.include_router(dashboard_router)
+    application.include_router(storage_router)
     return application
 
 

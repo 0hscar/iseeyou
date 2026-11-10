@@ -3,14 +3,14 @@ from __future__ import annotations
 import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from isee_network.metrics import CounterSample
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class SQLiteStore:
@@ -177,6 +177,302 @@ class SQLiteStore:
                     COMMIT;
                     """
                 )
+                version = 4
+            if version == 4:
+                connection.executescript(
+                    """
+                    BEGIN IMMEDIATE;
+
+                    CREATE INDEX IF NOT EXISTS collection_runs_by_completed_at
+                        ON collection_runs (completed_at, id);
+
+                    PRAGMA user_version = 5;
+                    COMMIT;
+                    """
+                )
+
+    def database_size_bytes(self) -> int:
+        return sum(
+            candidate.stat().st_size
+            for candidate in (
+                self.path,
+                Path(f"{self.path}-wal"),
+                Path(f"{self.path}-shm"),
+            )
+            if candidate.exists()
+        )
+
+    def monthly_storage_usage(self) -> dict[str, Any]:
+        tables = {
+            "runs": (
+                "collection_runs AS t",
+                "",
+                (
+                    "id",
+                    "started_at",
+                    "completed_at",
+                    "router_sampled_at",
+                    "router_status",
+                    "router_error",
+                    "uptime",
+                    "uptime_seconds",
+                    "cpu_load_percent",
+                    "free_memory_bytes",
+                    "total_memory_bytes",
+                ),
+            ),
+            "interface_samples": (
+                "interface_samples AS t",
+                "JOIN collection_runs AS r ON r.id = t.run_id",
+                (
+                    "run_id",
+                    "interface_name",
+                    "router_interface_id",
+                    "interface_type",
+                    "running",
+                    "rx_bytes",
+                    "tx_bytes",
+                    "rx_packets",
+                    "tx_packets",
+                    "rx_errors",
+                    "tx_errors",
+                    "rate_valid",
+                    "rate_reason",
+                    "rx_bits_per_second",
+                    "tx_bits_per_second",
+                ),
+            ),
+            "interface_inventory": (
+                "interface_inventory AS t",
+                "JOIN collection_runs AS r ON r.id = t.run_id",
+                (
+                    "run_id",
+                    "interface_name",
+                    "router_interface_id",
+                    "interface_type",
+                    "comment",
+                    "running",
+                    "disabled",
+                ),
+            ),
+            "connectivity_samples": (
+                "connectivity_samples AS t",
+                "JOIN collection_runs AS r ON r.id = t.run_id",
+                (
+                    "run_id",
+                    "target_name",
+                    "target_host",
+                    "target_port",
+                    "probes_sent",
+                    "probes_succeeded",
+                    "probe_failure_percent",
+                    "latency_ms",
+                    "error",
+                ),
+            ),
+        }
+        months: dict[str, dict[str, int | str]] = {}
+        with closing(self._connect()) as connection:
+            for count_key, (table, join, columns) in tables.items():
+                payload_terms = []
+                for column in columns:
+                    value = f't."{column}"'
+                    payload_terms.append(
+                        f"(CASE WHEN {value} IS NULL THEN 4 ELSE "
+                        f"length(CAST({value} AS BLOB)) + "
+                        f"CASE WHEN typeof({value}) = 'text' THEN 2 ELSE 0 END END)"
+                    )
+                json_key_overhead = sum(len(column) + 3 for column in columns)
+                json_key_overhead += len(columns) + 1
+                size_expression = f"{json_key_overhead} + " + " + ".join(payload_terms)
+                month_expression = (
+                    "substr(t.completed_at, 1, 7)"
+                    if not join
+                    else "substr(r.completed_at, 1, 7)"
+                )
+                rows = connection.execute(
+                    f"""
+                    SELECT {month_expression} AS month, COUNT(*) AS row_count,
+                           SUM({size_expression}) AS payload_bytes
+                    FROM {table}
+                    {join}
+                    GROUP BY month
+                    """
+                ).fetchall()
+                for row in rows:
+                    summary = months.setdefault(
+                        row["month"],
+                        {
+                            "month": row["month"],
+                            "runs": 0,
+                            "interface_samples": 0,
+                            "interface_inventory": 0,
+                            "connectivity_samples": 0,
+                            "estimated_payload_bytes": 0,
+                        },
+                    )
+                    summary[count_key] = row["row_count"]
+                    summary["estimated_payload_bytes"] += row["payload_bytes"] or 0
+
+        return {
+            "database_bytes": self.database_size_bytes(),
+            "months": sorted(months.values(), key=lambda item: item["month"], reverse=True),
+        }
+
+    def iter_export_records(
+        self,
+        start: datetime,
+        end_exclusive: datetime,
+    ) -> Iterator[dict[str, Any]]:
+        start_text = start.isoformat(timespec="milliseconds")
+        end_text = end_exclusive.isoformat(timespec="milliseconds")
+        with closing(self._connect()) as connection:
+            yield {
+                "record_type": "metadata",
+                "format_version": 1,
+                "schema_version": SCHEMA_VERSION,
+                "start": start_text,
+                "end_exclusive": end_text,
+                "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+            queries = (
+                (
+                    "collection_runs",
+                    """
+                    SELECT r.* FROM collection_runs AS r
+                    WHERE r.completed_at >= ? AND r.completed_at < ?
+                    ORDER BY r.id
+                    """,
+                ),
+                (
+                    "interface_samples",
+                    """
+                    SELECT s.* FROM interface_samples AS s
+                    JOIN collection_runs AS r ON r.id = s.run_id
+                    WHERE r.completed_at >= ? AND r.completed_at < ?
+                    ORDER BY s.run_id, s.interface_name
+                    """,
+                ),
+                (
+                    "interface_inventory",
+                    """
+                    SELECT i.* FROM interface_inventory AS i
+                    JOIN collection_runs AS r ON r.id = i.run_id
+                    WHERE r.completed_at >= ? AND r.completed_at < ?
+                    ORDER BY i.run_id, i.interface_name
+                    """,
+                ),
+                (
+                    "connectivity_samples",
+                    """
+                    SELECT s.* FROM connectivity_samples AS s
+                    JOIN collection_runs AS r ON r.id = s.run_id
+                    WHERE r.completed_at >= ? AND r.completed_at < ?
+                    ORDER BY s.run_id, s.target_name
+                    """,
+                ),
+            )
+            for record_type, query in queries:
+                cursor = connection.execute(query, (start_text, end_text))
+                while rows := cursor.fetchmany(500):
+                    for row in rows:
+                        yield {"record_type": record_type, **dict(row)}
+
+            snapshot = connection.execute(
+                """
+                SELECT snapshot.run_id, snapshot.sampled_at
+                FROM device_inventory_snapshot AS snapshot
+                JOIN collection_runs AS r ON r.id = snapshot.run_id
+                WHERE snapshot.id = 1
+                  AND r.completed_at >= ?
+                  AND r.completed_at < ?
+                """,
+                (start_text, end_text),
+            ).fetchone()
+            if snapshot is not None:
+                yield {
+                    "record_type": "device_inventory_snapshot",
+                    **dict(snapshot),
+                }
+                cursor = connection.execute(
+                    """
+                    SELECT device.mac_address, device.interface_name, device.bridge_name,
+                           device.vlan_id, device.bridge_age, device.host_name,
+                           device.dhcp_server, address.ip_address
+                    FROM connected_devices AS device
+                    LEFT JOIN connected_device_addresses AS address
+                        ON address.mac_address = device.mac_address
+                    ORDER BY device.mac_address, address.ip_address
+                    """
+                )
+                while rows := cursor.fetchmany(500):
+                    for row in rows:
+                        yield {"record_type": "connected_device", **dict(row)}
+
+    def delete_history_before(
+        self,
+        cutoff: datetime,
+        *,
+        protected_days: int = 30,
+    ) -> dict[str, int]:
+        if cutoff.tzinfo is None or cutoff.utcoffset() is None:
+            raise ValueError("cutoff must include a timezone")
+        if cutoff > datetime.now(timezone.utc) - timedelta(days=protected_days):
+            raise ValueError(
+                f"History newer than {protected_days} days is protected from deletion"
+            )
+
+        cutoff_text = cutoff.astimezone(timezone.utc).isoformat(timespec="seconds")
+        database_bytes_before = self.database_size_bytes()
+        deleted: dict[str, int] = {}
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """
+                CREATE TEMP TABLE cleanup_candidates (
+                    id INTEGER PRIMARY KEY
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO cleanup_candidates (id)
+                SELECT id
+                FROM collection_runs
+                WHERE completed_at < ?
+                  AND id != COALESCE(
+                    (SELECT run_id FROM device_inventory_snapshot WHERE id = 1),
+                    -1
+                  )
+                """,
+                (cutoff_text,),
+            )
+            for table in (
+                "interface_samples",
+                "interface_inventory",
+                "connectivity_samples",
+            ):
+                cursor = connection.execute(
+                    f"""
+                    DELETE FROM {table}
+                    WHERE run_id IN (SELECT id FROM cleanup_candidates)
+                    """
+                )
+                deleted[table] = cursor.rowcount
+            cursor = connection.execute(
+                """
+                DELETE FROM collection_runs
+                WHERE id IN (SELECT id FROM cleanup_candidates)
+                """
+            )
+            deleted["collection_runs"] = cursor.rowcount
+            connection.execute("DROP TABLE cleanup_candidates")
+
+        if deleted["collection_runs"]:
+            with closing(self._connect()) as connection:
+                connection.execute("VACUUM")
+        deleted["database_bytes_before"] = database_bytes_before
+        deleted["database_bytes_after"] = self.database_size_bytes()
+        return deleted
 
     def latest_interface_samples(
         self,

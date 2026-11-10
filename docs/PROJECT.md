@@ -250,9 +250,14 @@ The dashboard is served by FastAPI/Jinja2 with plain CSS and JavaScript and loca
 
 **Phase 5 — Operational readiness**
 
-- Add retention, configuration documentation, automated tests and service management.
+- [x] Add monthly storage usage visibility, compressed JSONL export and protected manual cleanup.
+- [x] Document storage estimates, exports, deletion safeguards and database backup/restore.
+- [ ] Add a configurable automatic retention policy, if wanted.
+- [x] Add configuration documentation, automated tests and service management.
 - Test startup, shutdown, restart and recovery from router unavailability.
-- Document backup and restore procedures.
+
+The Storage view reports actual SQLite file size and estimated per-month record payload size, exports date ranges as gzip-compressed JSON Lines, and can delete history only when it is at least 30 days old. Manual deletion vacuums SQLite to reclaim space and preserves the current device snapshot. No automatic data deletion runs.
+See [STORAGE.md](STORAGE.md) for operator instructions and data-handling details.
 
 **Phase 6 — Expansion**
 

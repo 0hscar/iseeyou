@@ -22,4 +22,6 @@ if (page === "overview") {
   import("./connectivity.js").then(({ startConnectivity }) => startConnectivity());
 } else if (page === "devices") {
   import("./devices.js").then(({ startDevices }) => startDevices());
+} else if (page === "storage") {
+  import("./storage.js");
 }

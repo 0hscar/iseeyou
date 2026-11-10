@@ -175,6 +175,10 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/health/collector
 ```
 
+For the Storage view’s monthly estimates, compressed exports, cleanup
+safeguards, and full database backup/restore steps, see
+[STORAGE.md](STORAGE.md).
+
 If you changed a systemd unit in the checkout, copy the updated unit file(s)
 into `~/.config/systemd/user/` before `daemon-reload`. If you changed the
 Caddyfile, copy it to `~/.config/isee/Caddyfile` and restart

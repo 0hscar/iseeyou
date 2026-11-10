@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">System</p>
+      <h1>Storage</h1>
+      <p class="page-description">Review database growth, export compressed monthly archives, and safely remove old history.</p>
+    </div>
+  </div>
+
+  <section class="metric-grid storage-metrics" aria-label="Database storage summary">
+    <article class="metric-card">
+      <div class="metric-heading"><span>Database files</span><span class="metric-symbol" aria-hidden="true">▤</span></div>
+      <p class="metric-value" id="storage-database-size">Loading…</p>
+      <p class="metric-caption">Current SQLite database and sidecar files</p>
+    </article>
+    <article class="metric-card">
+      <div class="metric-heading"><span>Recorded months</span><span class="metric-symbol" aria-hidden="true">◷</span></div>
+      <p class="metric-value" id="storage-month-count">—</p>
+      <p class="metric-caption">Months containing stored collection history</p>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Monthly history</p>
+        <h2>Storage by month</h2>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Month (UTC)</th>
+            <th scope="col">Collection runs</th>
+            <th scope="col">Interface samples</th>
+            <th scope="col">Connectivity samples</th>
+            <th scope="col">Estimated record data</th>
+            <th scope="col">Archive</th>
+          </tr>
+        </thead>
+        <tbody id="storage-month-rows">
+          <tr><td class="empty-cell" colspan="6">Loading storage information…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="panel-note">Monthly byte counts estimate the JSON representation of stored records. They are not per-month SQLite disk allocations; indexes and database page overhead are included only in the total database size above. The current connected-device list is a single latest snapshot, not monthly history. The downloaded archive is gzip-compressed JSON Lines containing network measurements and identifiers; keep it private. Automatic import/restore is not currently supported.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Data cleanup</p>
+        <h2>Delete old history</h2>
+      </div>
+    </div>
+    <p class="panel-note storage-protection">History newer than 30 days is protected. Export anything you may need before deleting; deleted data cannot be recovered from iSeeYou.</p>
+    <div class="storage-delete-controls">
+      <div class="field-group">
+        <label for="storage-delete-before">Delete records before (UTC)</label>
+        <input id="storage-delete-before" type="date">
+      </div>
+      <button class="action-button action-button-danger" id="storage-delete-button" type="button" disabled>Delete older history</button>
+    </div>
+    <p class="panel-note">The current connected-device snapshot is retained even if its collection run is old. After deleting history, iSeeYou rebuilds the SQLite file to reclaim disk space.</p>
+    <p class="inline-error" id="storage-message" role="status" hidden></p>
+  </section>
+{% endblock %}

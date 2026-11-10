@@ -52,6 +52,15 @@
             <span class="nav-icon" aria-hidden="true">⌘</span>
             <span>Devices</span>
           </a>
+          <p class="nav-section-label nav-section-spaced">System</p>
+          <a
+            class="nav-link{% if page == 'storage' %} is-active{% endif %}"
+            href="/storage"
+            {% if page == 'storage' %}aria-current="page"{% endif %}
+          >
+            <span class="nav-icon" aria-hidden="true">▤</span>
+            <span>Storage</span>
+          </a>
         </nav>
         <div class="sidebar-footer">
           <span class="status-indicator" aria-hidden="true"></span>
